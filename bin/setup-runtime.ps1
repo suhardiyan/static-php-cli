@@ -53,7 +53,7 @@ if ($action -eq 'add-path') {
 # get php 8.1 specific version
 
 # php windows download
-$PHPRuntimeUrl = "https://windows.php.net/downloads/releases/archives/php-8.4.4-nts-Win32-vs17-x64.zip"
+$PHPRuntimeUrl = "https://windows.php.net/downloads/releases/archives/php-8.3.30-nts-Win32-vs16-x64.zip"
 Write-Host "Downloading PHP from: " -NoNewline
 Write-Host $PHPRuntimeUrl -ForegroundColor Cyan
 $ComposerUrl = "https://getcomposer.org/download/latest-stable/composer.phar"

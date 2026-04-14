@@ -156,8 +156,10 @@ class WindowsBuilder extends BuilderBase
             }
         }
 
+        $cl_prefix = $this->makePhpBuildClPrefix();
+
         // add nmake wrapper
-        FileSystem::writeFile(SOURCE_PATH . '\php-src\nmake_cli_wrapper.bat', "nmake /nologo {$debug_overrides}LIBS_CLI=\"ws2_32.lib shell32.lib {$extra_libs}\" EXTRA_LD_FLAGS_PROGRAM= %*");
+        FileSystem::writeFile(SOURCE_PATH . '\php-src\nmake_cli_wrapper.bat', "@echo off\r\n{$cl_prefix}nmake /nologo {$debug_overrides}LIBS_CLI=\"ws2_32.lib shell32.lib {$extra_libs}\" EXTRA_LD_FLAGS_PROGRAM= %*");
 
         cmd()->cd(SOURCE_PATH . '\php-src')->exec("{$this->sdk_prefix} nmake_cli_wrapper.bat --task-args php.exe");
 
@@ -181,8 +183,10 @@ class WindowsBuilder extends BuilderBase
             }
         }
 
+        $cl_prefix = $this->makePhpBuildClPrefix();
+
         // add nmake wrapper
-        FileSystem::writeFile(SOURCE_PATH . '\php-src\nmake_cgi_wrapper.bat', "nmake /nologo {$debug_overrides}LIBS_CGI=\"ws2_32.lib kernel32.lib advapi32.lib {$extra_libs}\" EXTRA_LD_FLAGS_PROGRAM= %*");
+        FileSystem::writeFile(SOURCE_PATH . '\php-src\nmake_cgi_wrapper.bat', "@echo off\r\n{$cl_prefix}nmake /nologo {$debug_overrides}LIBS_CGI=\"ws2_32.lib kernel32.lib advapi32.lib {$extra_libs}\" EXTRA_LD_FLAGS_PROGRAM= %*");
 
         cmd()->cd(SOURCE_PATH . '\php-src')->exec("{$this->sdk_prefix} nmake_cgi_wrapper.bat --task-args php-cgi.exe");
 
@@ -224,10 +228,12 @@ class WindowsBuilder extends BuilderBase
             }
         }
 
+        $cl_prefix = $this->makePhpBuildClPrefix();
+
         // add nmake wrapper
         $fake_cli = $this->getOption('with-micro-fake-cli', false) ? ' /DPHP_MICRO_FAKE_CLI" ' : '';
         $wrapper = "nmake /nologo {$debug_overrides}LIBS_MICRO=\"ws2_32.lib shell32.lib {$extra_libs}\" CFLAGS_MICRO=\"/DZEND_ENABLE_STATIC_TSRMLS_CACHE=1{$fake_cli}\" %*";
-        FileSystem::writeFile(SOURCE_PATH . '\php-src\nmake_micro_wrapper.bat', $wrapper);
+        FileSystem::writeFile(SOURCE_PATH . '\php-src\nmake_micro_wrapper.bat', "@echo off\r\n{$cl_prefix}{$wrapper}");
 
         // phar patch for micro
         if ($this->getExt('phar')) {
@@ -303,6 +309,7 @@ class WindowsBuilder extends BuilderBase
         foreach ($dlls as $dll) {
             @unlink($dll);
         }
+        $this->syncRuntimeDlls();
         // sanity check for php-cli
         if (($build_target & BUILD_TARGET_CLI) === BUILD_TARGET_CLI) {
             logger()->info('running cli sanity check');
@@ -419,5 +426,53 @@ class WindowsBuilder extends BuilderBase
             file_put_contents($wrapper_bat, $internal_cmd . ' %*');
         }
         return "{$this->sdk_prefix} {$wrapper_bat} --task-args";
+    }
+
+    private function makePhpBuildClPrefix(): string
+    {
+        if ($this->getExt('intl') === null) {
+            return '';
+        }
+        return 'set "CL=%CL% /std:c++17"' . "\r\n";
+    }
+
+    private function syncRuntimeDlls(): void
+    {
+        if ($this->getExt('pgsql') === null && $this->getExt('pdo_pgsql') === null) {
+            return;
+        }
+
+        $postgresBin = SOURCE_PATH . '\postgresql-win\bin';
+        if (!is_dir($postgresBin)) {
+            logger()->warning('PostgreSQL runtime bin directory not found, skipping runtime DLL sync.');
+            return;
+        }
+
+        $runtimeDlls = [
+            'libpq.dll',
+            'libcrypto-3-x64.dll',
+            'libssl-3-x64.dll',
+            'libiconv-2.dll',
+            'libintl-9.dll',
+            'liblz4.dll',
+            'libxml2.dll',
+            'libcurl.dll',
+            'libzstd.dll',
+            'libwinpthread-1.dll',
+            'zlib1.dll',
+            'icudt67.dll',
+            'icuin67.dll',
+            'icuio67.dll',
+            'icutu67.dll',
+            'icuuc67.dll',
+        ];
+
+        foreach ($runtimeDlls as $dll) {
+            $source = $postgresBin . '\\' . $dll;
+            if (!file_exists($source)) {
+                continue;
+            }
+            FileSystem::copy($source, BUILD_BIN_PATH . '\\' . $dll);
+        }
     }
 }
